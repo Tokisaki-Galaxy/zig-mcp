@@ -1,3 +1,5 @@
 dist/
 node_modules/
 .zig-cache/
+zig-out/
+package-lock.json
