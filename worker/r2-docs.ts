@@ -1,5 +1,7 @@
 /// <reference types="@cloudflare/workers-types" />
 
+import { buildSourceFileIndex, renderSourceMarkdown } from "../mcp/std.js";
+
 export interface BuiltinFunction {
     func: string;
     signature: string;
@@ -9,8 +11,9 @@ export interface BuiltinFunction {
 export interface ZigDocsManifest {
     version: string;
     builtinsKey: string;
-    wasmKey: string;
+    itemDocsKey: string;
     sourcesKey: string;
+    searchIndexKey?: string;
 }
 
 export interface ZigDocsLatestIndex {
@@ -21,7 +24,6 @@ export interface ZigDocsLatestIndex {
 
 export interface ZigDocsEnv {
     ZIG_DOCS: R2Bucket;
-    DEFAULT_ZIG_VERSION?: string;
 }
 
 interface ZigDocsLatestIndexRaw {
@@ -29,6 +31,45 @@ interface ZigDocsLatestIndexRaw {
     version?: string;
     versions?: unknown;
     updatedAt?: string;
+}
+
+export interface StdSearchEntry {
+    name: string;
+    fqn: string;
+    kind: string;
+    summary?: string;
+}
+
+export interface StdSearchIndex {
+    version: string;
+    builtAt: string;
+    entries: StdSearchEntry[];
+}
+
+export interface StdLibItemDoc {
+    markdown: string;
+    sourcePath: string;
+}
+
+export interface StdLibItemIndex {
+    version: string;
+    builtAt: string;
+    items: Record<string, StdLibItemDoc>;
+}
+
+export interface SourceFileIndex {
+    version: string;
+    builtAt: string;
+    files: Record<string, string>;
+}
+
+export interface ZigDocsStatus {
+    latestVersion: string;
+    versions: string[];
+    itemDocsAvailable: boolean;
+    searchIndexAvailable: boolean;
+    itemDocsVersion?: string;
+    searchIndexVersion?: string;
 }
 
 function normalizeVersion(value: string | undefined): string | null {
@@ -76,8 +117,10 @@ function normalizeLatestIndex(value: ZigDocsLatestIndexRaw | null): ZigDocsLates
 
 const manifestCache = new Map<string, Promise<ZigDocsManifest>>();
 const latestIndexCache = new Map<string, Promise<ZigDocsLatestIndex>>();
+const searchIndexCache = new Map<string, Promise<StdSearchIndex>>();
+const itemDocsCache = new Map<string, Promise<StdLibItemIndex>>();
+const sourceIndexCache = new Map<string, Promise<SourceFileIndex>>();
 const builtinsCache = new Map<string, Promise<BuiltinFunction[]>>();
-const wasmCache = new Map<string, Promise<Uint8Array<ArrayBuffer>>>();
 const sourcesCache = new Map<string, Promise<Uint8Array<ArrayBuffer>>>();
 
 async function readJson<T>(bucket: R2Bucket, key: string): Promise<T> {
@@ -116,20 +159,12 @@ export function toolResult(text: string, isError = false) {
 }
 
 export class ZigDocsR2Store {
-    constructor(
-        private readonly bucket: R2Bucket,
-        private readonly defaultVersion?: string,
-    ) {}
+    constructor(private readonly bucket: R2Bucket) {}
 
     async resolveVersion(version?: string): Promise<string> {
         const explicitVersion = normalizeVersion(version);
         if (explicitVersion) {
             return explicitVersion;
-        }
-
-        const configuredVersion = normalizeVersion(this.defaultVersion);
-        if (configuredVersion) {
-            return configuredVersion;
         }
 
         const latest = await this.loadLatestIndex();
@@ -139,7 +174,7 @@ export class ZigDocsR2Store {
         }
 
         throw new Error(
-            "Missing Zig docs version. Pass a version or configure DEFAULT_ZIG_VERSION.",
+            "Missing Zig docs version. Pass a version or ensure zig/latest.json is available.",
         );
     }
 
@@ -162,17 +197,63 @@ export class ZigDocsR2Store {
         });
     }
 
+    async loadSearchIndex(version?: string): Promise<StdSearchIndex | null> {
+        const manifest = await this.loadManifest(version);
+        if (!manifest.searchIndexKey) {
+            return null;
+        }
+
+        return await this.cachedLoad(searchIndexCache, manifest.searchIndexKey, () =>
+            readJson<StdSearchIndex>(this.bucket, manifest.searchIndexKey as string),
+        );
+    }
+
+    async loadStdLibItemIndex(version?: string): Promise<StdLibItemIndex> {
+        const manifest = await this.loadManifest(version);
+        return await this.cachedLoad(itemDocsCache, manifest.itemDocsKey, () =>
+            readJson<StdLibItemIndex>(this.bucket, manifest.itemDocsKey),
+        );
+    }
+
+    async loadSourceIndex(version?: string): Promise<SourceFileIndex> {
+        const manifest = await this.loadManifest(version);
+        return await this.cachedLoad(sourceIndexCache, manifest.sourcesKey, async () => {
+            const sourcesBytes = await this.loadSources(version);
+            return buildSourceFileIndex(sourcesBytes, manifest.version);
+        });
+    }
+
+    async loadStatus(): Promise<ZigDocsStatus> {
+        const latest = await this.loadLatestIndex();
+        await this.loadManifest(latest.latestVersion);
+        let itemDocs: StdLibItemIndex | null = null;
+        let searchIndex: StdSearchIndex | null = null;
+        try {
+            itemDocs = await this.loadStdLibItemIndex(latest.latestVersion);
+        } catch {
+            itemDocs = null;
+        }
+
+        try {
+            searchIndex = await this.loadSearchIndex(latest.latestVersion);
+        } catch {
+            searchIndex = null;
+        }
+
+        return {
+            latestVersion: latest.latestVersion,
+            versions: latest.versions,
+            itemDocsAvailable: itemDocs !== null,
+            searchIndexAvailable: searchIndex !== null,
+            ...(itemDocs ? { itemDocsVersion: itemDocs.version } : {}),
+            ...(searchIndex ? { searchIndexVersion: searchIndex.version } : {}),
+        };
+    }
+
     async loadBuiltins(version?: string): Promise<BuiltinFunction[]> {
         const manifest = await this.loadManifest(version);
         return await this.cachedLoad(builtinsCache, manifest.builtinsKey, () =>
             readJson<BuiltinFunction[]>(this.bucket, manifest.builtinsKey),
-        );
-    }
-
-    async loadWasm(version?: string): Promise<Uint8Array<ArrayBuffer>> {
-        const manifest = await this.loadManifest(version);
-        return await this.cachedLoad(wasmCache, manifest.wasmKey, () =>
-            readBytes(this.bucket, manifest.wasmKey),
         );
     }
 
@@ -183,22 +264,31 @@ export class ZigDocsR2Store {
         );
     }
 
-    async loadStdlibAssets(version?: string): Promise<{
-        manifest: ZigDocsManifest;
-        wasmBytes: Uint8Array<ArrayBuffer>;
-        sourcesBytes: Uint8Array<ArrayBuffer>;
-    }> {
-        const manifest = await this.loadManifest(version);
-        const [wasmBytes, sourcesBytes] = await Promise.all([
-            this.loadWasm(version),
-            this.loadSources(version),
-        ]);
+    async loadStdLibItemMarkdown(version: string | undefined, name: string): Promise<string> {
+        const itemIndex = await this.loadStdLibItemIndex(version);
+        const item = itemIndex.items[name];
+        if (!item) {
+            throw new Error(`Missing stdlib item docs: ${name}`);
+        }
 
-        return {
-            manifest,
-            wasmBytes,
-            sourcesBytes,
-        };
+        return item.markdown;
+    }
+
+    async loadStdLibItemSourceMarkdown(version: string | undefined, name: string): Promise<string> {
+        const itemIndex = await this.loadStdLibItemIndex(version);
+        const item = itemIndex.items[name];
+        if (!item) {
+            throw new Error(`Missing stdlib item docs: ${name}`);
+        }
+
+        const sourceIndex = await this.loadSourceIndex(version);
+        const sourcePath = item.sourcePath.replace(/\\/g, "/").replace(/^(\.\/)+/, "");
+        const source = sourceIndex.files[sourcePath];
+        if (!source) {
+            throw new Error(`Missing source file: ${sourcePath}`);
+        }
+
+        return renderSourceMarkdown(sourcePath, source);
     }
 
     private manifestKey(version: string): string {

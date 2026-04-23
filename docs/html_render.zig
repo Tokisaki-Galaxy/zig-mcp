@@ -32,7 +32,7 @@ pub const Annotation = struct {
     dom_id: u32,
 };
 
-pub fn fileSourceHtml(
+pub fn fileSourceMarkdown(
     file_index: Walk.File.Index,
     out: *ArrayList(u8),
     root_node: Ast.Node.Index,
@@ -245,6 +245,15 @@ pub fn fileSourceHtml(
     if (options.add_code_fence) {
         try out.appendSlice(gpa, "\n```");
     }
+}
+
+pub fn fileSourceHtml(
+    file_index: Walk.File.Index,
+    out: *ArrayList(u8),
+    root_node: Ast.Node.Index,
+    options: RenderSourceOptions,
+) !void {
+    return fileSourceMarkdown(file_index, out, root_node, options);
 }
 
 fn appendUnindented(out: *ArrayList(u8), s: []const u8, indent: usize) !void {

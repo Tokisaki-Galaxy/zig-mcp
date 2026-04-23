@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 interface Args {
-    version: string;
+    version?: string;
     bundleDir: string;
     bucket: string;
 }
@@ -23,7 +23,6 @@ interface ZigDocsLatestIndexRaw {
 
 function parseArgs(argv: string[]): Args {
     const args: Args = {
-        version: "master",
         bundleDir: "bundle",
         bucket: "zig-docs",
     };
@@ -136,14 +135,14 @@ function readLatestIndexFile(filePath: string): ZigDocsLatestIndex | null {
 }
 
 function mergeLatestIndexes(
-    version: string,
+    latestVersion: string,
     ...indexes: Array<ZigDocsLatestIndex | null>
 ): ZigDocsLatestIndex {
-    const versions = [version, ...indexes.flatMap((index) => index?.versions ?? [])];
+    const versions = [latestVersion, ...indexes.flatMap((index) => index?.versions ?? [])];
     const uniqueVersions = Array.from(new Set(versions));
 
     return {
-        latestVersion: version,
+        latestVersion,
         versions: uniqueVersions,
         updatedAt: new Date().toISOString(),
     };
@@ -177,44 +176,72 @@ function uploadObject(bucket: string, key: string, filePath: string, contentType
     }
 }
 
-function main() {
-    const args = parseArgs(process.argv.slice(2));
-    const versionDir = path.resolve(args.bundleDir, "zig", args.version);
+function getVersionsToPublish(latest: ZigDocsLatestIndex, explicitVersion?: string): string[] {
+    if (explicitVersion) {
+        return [explicitVersion];
+    }
 
+    const versions = latest.versions.length > 0 ? latest.versions : [latest.latestVersion];
+    return Array.from(new Set(versions));
+}
+
+function uploadVersionBundle(args: Args, version: string) {
+    const versionDir = path.resolve(args.bundleDir, "zig", version);
     const manifestPath = path.join(versionDir, "manifest.json");
     const builtinPath = path.join(versionDir, "builtin-functions.json");
-    const wasmPath = path.join(versionDir, "main.wasm");
+    const itemDocsPath = path.join(versionDir, "item-docs.json");
+    const searchIndexPath = path.join(versionDir, "search-index.json");
     const sourcesPath = path.join(versionDir, "sources.tar");
-    const latestPath = path.resolve(args.bundleDir, "zig", "latest.json");
 
-    for (const filePath of [manifestPath, builtinPath, wasmPath, sourcesPath, latestPath]) {
+    for (const filePath of [
+        manifestPath,
+        builtinPath,
+        itemDocsPath,
+        searchIndexPath,
+        sourcesPath,
+    ]) {
         if (!fs.existsSync(filePath)) {
             throw new Error(`Missing bundle file: ${filePath}`);
         }
     }
 
-    const localLatest = readLatestIndexFile(latestPath);
-    const remoteLatest = readLatestIndex(args.bucket, "zig/latest.json");
-    const mergedLatest = mergeLatestIndexes(args.version, localLatest, remoteLatest);
-    fs.writeFileSync(latestPath, JSON.stringify(mergedLatest, null, 2));
-
+    uploadObject(args.bucket, `zig/${version}/manifest.json`, manifestPath, "application/json");
     uploadObject(
         args.bucket,
-        `zig/${args.version}/manifest.json`,
-        manifestPath,
-        "application/json",
-    );
-    uploadObject(
-        args.bucket,
-        `zig/${args.version}/builtin-functions.json`,
+        `zig/${version}/builtin-functions.json`,
         builtinPath,
         "application/json",
     );
-    uploadObject(args.bucket, `zig/${args.version}/main.wasm`, wasmPath, "application/wasm");
-    uploadObject(args.bucket, `zig/${args.version}/sources.tar`, sourcesPath, "application/x-tar");
+    uploadObject(args.bucket, `zig/${version}/item-docs.json`, itemDocsPath, "application/json");
+    uploadObject(
+        args.bucket,
+        `zig/${version}/search-index.json`,
+        searchIndexPath,
+        "application/json",
+    );
+    uploadObject(args.bucket, `zig/${version}/sources.tar`, sourcesPath, "application/x-tar");
+}
+
+function main() {
+    const args = parseArgs(process.argv.slice(2));
+    const latestPath = path.resolve(args.bundleDir, "zig", "latest.json");
+
+    const localLatest = readLatestIndexFile(latestPath);
+    if (!localLatest) {
+        throw new Error(`Missing bundle file: ${latestPath}`);
+    }
+
+    const remoteLatest = readLatestIndex(args.bucket, "zig/latest.json");
+    const mergedLatest = mergeLatestIndexes(localLatest.latestVersion, localLatest, remoteLatest);
+    fs.writeFileSync(latestPath, JSON.stringify(mergedLatest, null, 2));
+
+    const versionsToPublish = getVersionsToPublish(localLatest, args.version);
+    for (const version of versionsToPublish) {
+        uploadVersionBundle(args, version);
+    }
     uploadObject(args.bucket, "zig/latest.json", latestPath, "application/json");
 
-    console.log(`Uploaded R2 bundle for ${args.version} to bucket ${args.bucket}`);
+    console.log(`Uploaded R2 bundle for ${versionsToPublish.join(", ")} to bucket ${args.bucket}`);
 }
 
 main();

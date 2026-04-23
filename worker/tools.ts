@@ -2,7 +2,7 @@
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import z from "zod";
-import { getStdLibItem, searchStdLib } from "../mcp/std.js";
+import { searchStdLibFromIndex } from "../mcp/std.js";
 import {
     type BuiltinFunction,
     normalizeBuiltinQuery,
@@ -10,6 +10,7 @@ import {
     type ZigDocsEnv,
     type ZigDocsLatestIndex,
     ZigDocsR2Store,
+    type ZigDocsStatus,
 } from "./r2-docs.js";
 
 function formatBuiltinResults(functions: BuiltinFunction[]): string {
@@ -32,18 +33,33 @@ function formatLatestVersion(index: ZigDocsLatestIndex): string {
     return lines.join("\n");
 }
 
+function formatStatus(status: ZigDocsStatus): string {
+    const lines = [
+        `Latest Zig docs version: ${status.latestVersion}`,
+        `Available versions: ${status.versions.join(", ")}`,
+        `Item docs: ${status.itemDocsAvailable ? "available" : "missing"}`,
+        `Search index: ${status.searchIndexAvailable ? "available" : "missing"}`,
+    ];
+
+    if (status.searchIndexVersion) {
+        lines.push(`Search index version: ${status.searchIndexVersion}`);
+    }
+
+    return lines.join("\n");
+}
+
 function createListBuiltinFunctionsTool(store: ZigDocsR2Store) {
     return {
         name: "list_builtin_functions",
         config: {
             description:
-                "Lists all available Zig builtin functions for a specific version. Provide an optional version to inspect a different Zig release than the default.",
+                "Lists all available Zig builtin functions for a specific version. If omitted, the latest version from R2 is used.",
             inputSchema: {
                 version: z
                     .string()
                     .min(1)
                     .optional()
-                    .describe("Optional Zig version to inspect (for example: master, 0.14.1)"),
+                    .describe("Optional Zig version to inspect (for example: 0.14.1)"),
             },
         },
         handler: async ({ version }: { version?: string }) => {
@@ -95,7 +111,7 @@ function createGetBuiltinFunctionTool(store: ZigDocsR2Store) {
         name: "get_builtin_function",
         config: {
             description:
-                "Search for Zig builtin functions by name and get their documentation, signatures, and usage information. Provide an optional version to inspect a different Zig release than the default.",
+                "Search for Zig builtin functions by name and get their documentation, signatures, and usage information. If omitted, the latest version from R2 is used.",
             inputSchema: {
                 function_name: z
                     .string()
@@ -107,7 +123,7 @@ function createGetBuiltinFunctionTool(store: ZigDocsR2Store) {
                     .string()
                     .min(1)
                     .optional()
-                    .describe("Optional Zig version to inspect (for example: master, 0.14.1)"),
+                    .describe("Optional Zig version to inspect (for example: 0.14.1)"),
             },
         },
         handler: async ({
@@ -178,7 +194,7 @@ function createSearchStdLibTool(store: ZigDocsR2Store) {
         name: "search_std_lib",
         config: {
             description:
-                "Search the Zig standard library for functions, types, namespaces, and other declarations. Provide an optional version to inspect a different Zig release than the default.",
+                "Search the Zig standard library for functions, types, namespaces, and other declarations. If omitted, the latest version from R2 is used.",
             inputSchema: {
                 query: z
                     .string()
@@ -197,7 +213,7 @@ function createSearchStdLibTool(store: ZigDocsR2Store) {
                     .string()
                     .min(1)
                     .optional()
-                    .describe("Optional Zig version to inspect (for example: master, 0.14.1)"),
+                    .describe("Optional Zig version to inspect (for example: 0.14.1)"),
             },
         },
         handler: async ({
@@ -210,18 +226,17 @@ function createSearchStdLibTool(store: ZigDocsR2Store) {
             version?: string;
         }) => {
             try {
-                const { wasmBytes, sourcesBytes } = await store.loadStdlibAssets(version);
                 const normalizedQuery = query.trim();
                 if (!normalizedQuery) {
                     return toolResult("Search query cannot be empty.", true);
                 }
 
-                const markdown = await searchStdLib(
-                    wasmBytes,
-                    sourcesBytes,
-                    normalizedQuery,
-                    limit,
-                );
+                const searchIndex = await store.loadSearchIndex(version);
+                if (!searchIndex) {
+                    return toolResult("Search index missing for this Zig version.", true);
+                }
+
+                const markdown = searchStdLibFromIndex(searchIndex, normalizedQuery, limit);
                 return toolResult(markdown);
             } catch (error) {
                 return toolResult(
@@ -238,7 +253,7 @@ function createGetStdLibItemTool(store: ZigDocsR2Store) {
         name: "get_std_lib_item",
         config: {
             description:
-                "Get detailed documentation for a specific item in the Zig standard library. Provide the fully qualified name and an optional version to inspect a different Zig release than the default.",
+                "Get detailed documentation for a specific item in the Zig standard library. If omitted, the latest version from R2 is used.",
             inputSchema: {
                 name: z
                     .string()
@@ -256,7 +271,7 @@ function createGetStdLibItemTool(store: ZigDocsR2Store) {
                     .string()
                     .min(1)
                     .optional()
-                    .describe("Optional Zig version to inspect (for example: master, 0.14.1)"),
+                    .describe("Optional Zig version to inspect (for example: 0.14.1)"),
             },
         },
         handler: async ({
@@ -269,13 +284,9 @@ function createGetStdLibItemTool(store: ZigDocsR2Store) {
             version?: string;
         }) => {
             try {
-                const { wasmBytes, sourcesBytes } = await store.loadStdlibAssets(version);
-                const markdown = await getStdLibItem(
-                    wasmBytes,
-                    sourcesBytes,
-                    name,
-                    get_source_file,
-                );
+                const markdown = get_source_file
+                    ? await store.loadStdLibItemSourceMarkdown(version, name)
+                    : await store.loadStdLibItemMarkdown(version, name);
                 return toolResult(markdown);
             } catch (error) {
                 return toolResult(
@@ -287,8 +298,33 @@ function createGetStdLibItemTool(store: ZigDocsR2Store) {
     };
 }
 
+function createGetStatusTool(store: ZigDocsR2Store) {
+    return {
+        name: "get_status",
+        config: {
+            description:
+                "Report the latest Zig docs version, version list, and whether the search index is available.",
+            inputSchema: {},
+        },
+        handler: async () => {
+            try {
+                const status = await store.loadStatus();
+                return toolResult(formatStatus(status));
+            } catch (error) {
+                return toolResult(
+                    `Unable to read Zig docs status: ${error instanceof Error ? error.message : String(error)}`,
+                    true,
+                );
+            }
+        },
+    };
+}
+
 export function registerWorkerTools(mcpServer: McpServer, env: ZigDocsEnv) {
-    const store = new ZigDocsR2Store(env.ZIG_DOCS, env.DEFAULT_ZIG_VERSION);
+    const store = new ZigDocsR2Store(env.ZIG_DOCS);
+
+    const getStatus = createGetStatusTool(store);
+    mcpServer.registerTool(getStatus.name, getStatus.config, getStatus.handler);
 
     const getLatestVersion = createGetLatestVersionTool(store);
     mcpServer.registerTool(

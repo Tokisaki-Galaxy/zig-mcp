@@ -9,9 +9,6 @@
             "invocation_logs": true
         }
     },
-    "vars": {
-        "DEFAULT_ZIG_VERSION": "master"
-    },
     "r2_buckets": [
         {
             "binding": "ZIG_DOCS",

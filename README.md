@@ -2,7 +2,7 @@
 
 Model Context Protocol (MCP) server for Zig documentation, deployed as a Cloudflare Worker.
 
-The Worker serves docs over remote MCP at `/mcp` and reads versioned Zig artifacts from R2. A separate snapshot step packages `main.wasm`, `sources.tar`, and builtin metadata for upload.
+The Worker serves docs over remote MCP at `/mcp` and reads versioned Zig artifacts from R2. A separate snapshot step packages pre-rendered item docs, `sources.tar`, builtin metadata, and search indexes for upload.
 
 > [!TIP]
 > Add `use zigdocs` to your prompt if you want to explicitly instruct the LLM to use Zig docs tools. Otherwise, LLM will automatically decide when to utilize MCP tools based on the context of your questions.
@@ -33,15 +33,24 @@ zig build
 bun run snapshot:prepare -- --version 0.14.1 --out ./bundle
 
 # Upload the bundle to R2
-bun run snapshot:publish -- --version 0.14.1 --bundle ./bundle --bucket zig-docs
+bun run snapshot:publish -- --bundle ./bundle --bucket zig-docs
+
+# Delete all objects from the R2 bucket
+bun run snapshot:clear -- --bucket zig-docs --force
+# or it
+bun run snapshot:clear -- --bucket zig-docs --force --access-key-id xxxx --secret-access-key xxxx
 
 # Deploy the Worker
 bun run deploy:worker
 ```
 
-> Requires Zig 0.16.0 or newer. If `zig build` fails, `snapshot:prepare` won't find `zig-out/bin/main.wasm`.
+> Requires Zig 0.16.0 or newer. If `zig build` fails, `snapshot:prepare` won't be able to pre-render the docs from `zig-out/bin/main.wasm`.
 
-> `snapshot:prepare` only builds the local bundle. `snapshot:publish` uploads to R2 and merges `zig/latest.json` with the existing index.
+> `snapshot:prepare` only builds the local bundle. `snapshot:publish` uploads every version listed in `bundle/zig/latest.json` and merges the latest index with R2.
+
+> If rich stdlib item rendering panics during `snapshot:prepare`, the bundle now stores a plain fallback document instead of skipping that item.
+
+> `snapshot:clear` is destructive. It deletes every object in the target bucket and only runs when `--force` is present.
 
 > `zig/latest.json` is now a version index. Each publish keeps older versions in R2 and updates the latest pointer.
 

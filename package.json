@@ -7,6 +7,7 @@
     "build": "bun run typecheck",
     "deploy:worker": "wrangler deploy",
     "snapshot:prepare": "bun scripts/prepare-r2-bundle.ts",
+    "snapshot:clear": "bun scripts/clear-r2-bucket.ts",
     "snapshot:publish": "bun scripts/publish-r2-bundle.ts",
     "lint": "bunx biome check",
     "lint:fix": "bunx biome check --write",
@@ -28,6 +29,7 @@
     "cloudflare-workers"
   ],
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1035.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "agents": "^0.11.5",
     "cheerio": "^1.1.0",

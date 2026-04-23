@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { downloadSourcesTar } from "../mcp/docs.js";
 import extractBuiltinFunctions from "../mcp/extract-builtin-functions.js";
+import { buildStdLibItemIndex, buildStdSearchIndex } from "../mcp/std.js";
 
 interface Args {
     version: string;
@@ -20,6 +21,12 @@ interface ZigDocsLatestIndexRaw {
     version?: unknown;
     versions?: unknown;
     updatedAt?: unknown;
+}
+
+interface ZigDocsItemIndex {
+    version: string;
+    builtAt: string;
+    items: Record<string, { markdown: string; sourcePath: string }>;
 }
 
 function parseArgs(argv: string[]): Args {
@@ -133,6 +140,7 @@ function mergeLatestIndex(
 async function main() {
     const args = parseArgs(process.argv.slice(2));
     const wasmSource = resolveWasmPath(args.wasmPath);
+    const wasmBytes = new Uint8Array(fs.readFileSync(wasmSource));
 
     const outRoot = path.resolve(args.outDir);
     const versionDir = path.join(outRoot, "zig", args.version);
@@ -141,18 +149,35 @@ async function main() {
     const builtins = await extractBuiltinFunctions(args.version, false, true, "remote");
     const sourcesTar = await downloadSourcesTar(args.version, false, true, "remote");
 
-    fs.copyFileSync(wasmSource, path.join(versionDir, "main.wasm"));
     fs.writeFileSync(path.join(versionDir, "sources.tar"), sourcesTar);
     fs.writeFileSync(
         path.join(versionDir, "builtin-functions.json"),
         JSON.stringify(builtins, null, 2),
     );
+    const itemIndex: ZigDocsItemIndex = await buildStdLibItemIndex(
+        wasmBytes,
+        sourcesTar,
+        args.version,
+        args.version,
+    );
+    fs.writeFileSync(path.join(versionDir, "item-docs.json"), JSON.stringify(itemIndex, null, 2));
+    const searchIndex = await buildStdSearchIndex(
+        wasmBytes,
+        sourcesTar,
+        args.version,
+        args.version,
+    );
+    fs.writeFileSync(
+        path.join(versionDir, "search-index.json"),
+        JSON.stringify(searchIndex, null, 2),
+    );
 
     const manifest = {
         version: args.version,
         builtinsKey: `zig/${args.version}/builtin-functions.json`,
-        wasmKey: `zig/${args.version}/main.wasm`,
+        itemDocsKey: `zig/${args.version}/item-docs.json`,
         sourcesKey: `zig/${args.version}/sources.tar`,
+        searchIndexKey: `zig/${args.version}/search-index.json`,
     };
 
     fs.writeFileSync(path.join(versionDir, "manifest.json"), JSON.stringify(manifest, null, 2));
