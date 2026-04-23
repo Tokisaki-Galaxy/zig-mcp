@@ -3,6 +3,12 @@
     "main": "worker/index.ts",
     "compatibility_date": "2026-04-23",
     "compatibility_flags": ["nodejs_compat"],
+    "observability": {
+        "logs": {
+            "enabled": true,
+            "invocation_logs": true
+        }
+    },
     "vars": {
         "DEFAULT_ZIG_VERSION": "master"
     },
@@ -11,5 +17,6 @@
             "binding": "ZIG_DOCS",
             "bucket_name": "zig-docs"
         }
-    ]
+    ],
+    "placement": { "mode": "smart" }
 }

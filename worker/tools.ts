@@ -8,12 +8,28 @@ import {
     normalizeBuiltinQuery,
     toolResult,
     type ZigDocsEnv,
+    type ZigDocsLatestIndex,
     ZigDocsR2Store,
 } from "./r2-docs.js";
 
 function formatBuiltinResults(functions: BuiltinFunction[]): string {
     const functionList = functions.map((fn) => `- ${fn.signature}`).join("\n");
     return `Available ${functions.length} builtin functions:\n\n${functionList}`;
+}
+
+function formatLatestVersion(index: ZigDocsLatestIndex): string {
+    const versions = index.versions.join(", ");
+    const lines = [`Latest Zig docs version: ${index.latestVersion}`];
+
+    if (versions.length > 0) {
+        lines.push(`Available versions: ${versions}`);
+    }
+
+    if (index.updatedAt) {
+        lines.push(`Updated at: ${index.updatedAt}`);
+    }
+
+    return lines.join("\n");
 }
 
 function createListBuiltinFunctionsTool(store: ZigDocsR2Store) {
@@ -37,6 +53,36 @@ function createListBuiltinFunctionsTool(store: ZigDocsR2Store) {
             } catch (error) {
                 return toolResult(
                     `Unable to list builtin functions: ${error instanceof Error ? error.message : String(error)}`,
+                    true,
+                );
+            }
+        },
+    };
+}
+
+function createGetLatestVersionTool(store: ZigDocsR2Store) {
+    return {
+        name: "get_latest_version",
+        config: {
+            description:
+                "Returns the latest published Zig docs version and the available version list from R2.",
+            inputSchema: {
+                include_versions: z
+                    .boolean()
+                    .default(true)
+                    .describe("Include the version list in the response (default: true)"),
+            },
+        },
+        handler: async ({ include_versions = true }: { include_versions?: boolean }) => {
+            try {
+                const index = await store.loadLatestIndex();
+                const message = include_versions
+                    ? formatLatestVersion(index)
+                    : `Latest Zig docs version: ${index.latestVersion}`;
+                return toolResult(message);
+            } catch (error) {
+                return toolResult(
+                    `Unable to get the latest Zig docs version: ${error instanceof Error ? error.message : String(error)}`,
                     true,
                 );
             }
@@ -243,6 +289,13 @@ function createGetStdLibItemTool(store: ZigDocsR2Store) {
 
 export function registerWorkerTools(mcpServer: McpServer, env: ZigDocsEnv) {
     const store = new ZigDocsR2Store(env.ZIG_DOCS, env.DEFAULT_ZIG_VERSION);
+
+    const getLatestVersion = createGetLatestVersionTool(store);
+    mcpServer.registerTool(
+        getLatestVersion.name,
+        getLatestVersion.config,
+        getLatestVersion.handler,
+    );
 
     const listBuiltinFunctions = createListBuiltinFunctionsTool(store);
     mcpServer.registerTool(

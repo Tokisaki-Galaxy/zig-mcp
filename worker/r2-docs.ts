@@ -13,9 +13,22 @@ export interface ZigDocsManifest {
     sourcesKey: string;
 }
 
+export interface ZigDocsLatestIndex {
+    latestVersion: string;
+    versions: string[];
+    updatedAt?: string;
+}
+
 export interface ZigDocsEnv {
     ZIG_DOCS: R2Bucket;
     DEFAULT_ZIG_VERSION?: string;
+}
+
+interface ZigDocsLatestIndexRaw {
+    latestVersion?: string;
+    version?: string;
+    versions?: unknown;
+    updatedAt?: string;
 }
 
 function normalizeVersion(value: string | undefined): string | null {
@@ -23,7 +36,46 @@ function normalizeVersion(value: string | undefined): string | null {
     return version && version.length > 0 ? version : null;
 }
 
+function normalizeVersionList(values: unknown): string[] {
+    if (!Array.isArray(values)) {
+        return [];
+    }
+
+    const normalized = values
+        .filter((value): value is string => typeof value === "string")
+        .map((value) => normalizeVersion(value))
+        .filter((value): value is string => value !== null);
+
+    return Array.from(new Set(normalized));
+}
+
+function normalizeLatestIndex(value: ZigDocsLatestIndexRaw | null): ZigDocsLatestIndex | null {
+    if (!value) {
+        return null;
+    }
+
+    const versions = normalizeVersionList(value.versions);
+    const latestVersion = normalizeVersion(value.latestVersion ?? value.version) ?? versions[0];
+    if (!latestVersion) {
+        return null;
+    }
+
+    const orderedVersions = [latestVersion];
+    for (const version of versions) {
+        if (version !== latestVersion && !orderedVersions.includes(version)) {
+            orderedVersions.push(version);
+        }
+    }
+
+    return {
+        latestVersion,
+        versions: orderedVersions,
+        updatedAt: typeof value.updatedAt === "string" ? value.updatedAt : undefined,
+    };
+}
+
 const manifestCache = new Map<string, Promise<ZigDocsManifest>>();
+const latestIndexCache = new Map<string, Promise<ZigDocsLatestIndex>>();
 const builtinsCache = new Map<string, Promise<BuiltinFunction[]>>();
 const wasmCache = new Map<string, Promise<Uint8Array<ArrayBuffer>>>();
 const sourcesCache = new Map<string, Promise<Uint8Array<ArrayBuffer>>>();
@@ -80,8 +132,8 @@ export class ZigDocsR2Store {
             return configuredVersion;
         }
 
-        const latest = await this.tryReadJson<{ version?: string }>("zig/latest.json");
-        const latestVersion = normalizeVersion(latest?.version);
+        const latest = await this.loadLatestIndex();
+        const latestVersion = normalizeVersion(latest.latestVersion);
         if (latestVersion) {
             return latestVersion;
         }
@@ -96,6 +148,18 @@ export class ZigDocsR2Store {
         return await this.cachedLoad(manifestCache, resolvedVersion, () =>
             readJson<ZigDocsManifest>(this.bucket, this.manifestKey(resolvedVersion)),
         );
+    }
+
+    async loadLatestIndex(): Promise<ZigDocsLatestIndex> {
+        return await this.cachedLoad(latestIndexCache, "zig/latest.json", async () => {
+            const latest = await this.tryReadJson<ZigDocsLatestIndexRaw>("zig/latest.json");
+            const normalized = normalizeLatestIndex(latest);
+            if (!normalized) {
+                throw new Error("Missing Zig docs latest index in zig/latest.json.");
+            }
+
+            return normalized;
+        });
     }
 
     async loadBuiltins(version?: string): Promise<BuiltinFunction[]> {
