@@ -9,7 +9,6 @@ const ArrayList = std.ArrayList;
 const Writer = std.Io.Writer;
 
 const fileSourceMarkdown = @import("html_render.zig").fileSourceMarkdown;
-const appendEscaped = @import("html_render.zig").appendEscaped;
 const resolveDeclLink = @import("html_render.zig").resolveDeclLink;
 const missing_feature_url_escape = @import("html_render.zig").missing_feature_url_escape;
 
@@ -440,37 +439,25 @@ fn decl_params_fallible(decl_index: Decl.Index) ![]Ast.Node.Index {
     return g.result.items;
 }
 
-export fn error_html(base_decl: Decl.Index, error_identifier: ErrorIdentifier) String {
+export fn error_markdown(base_decl: Decl.Index, error_identifier: ErrorIdentifier) String {
     string_result.clearRetainingCapacity();
     error_identifier.html(base_decl, &string_result) catch @panic("OOM");
     return String.init(string_result.items);
 }
 
-export fn error_markdown(base_decl: Decl.Index, error_identifier: ErrorIdentifier) String {
-    return error_html(base_decl, error_identifier);
-}
-
-export fn decl_field_html(decl_index: Decl.Index, field_node: Ast.Node.Index) String {
-    string_result.clearRetainingCapacity();
-    decl_field_html_fallible(&string_result, decl_index, field_node) catch @panic("OOM");
-    return String.init(string_result.items);
-}
-
 export fn decl_field_markdown(decl_index: Decl.Index, field_node: Ast.Node.Index) String {
-    return decl_field_html(decl_index, field_node);
-}
-
-export fn decl_param_html(decl_index: Decl.Index, param_node: Ast.Node.Index) String {
     string_result.clearRetainingCapacity();
-    decl_param_html_fallible(&string_result, decl_index, param_node) catch @panic("OOM");
+    decl_field_markdown_fallible(&string_result, decl_index, field_node) catch @panic("OOM");
     return String.init(string_result.items);
 }
 
 export fn decl_param_markdown(decl_index: Decl.Index, param_node: Ast.Node.Index) String {
-    return decl_param_html(decl_index, param_node);
+    string_result.clearRetainingCapacity();
+    decl_param_markdown_fallible(&string_result, decl_index, param_node) catch @panic("OOM");
+    return String.init(string_result.items);
 }
 
-fn decl_field_html_fallible(
+fn decl_field_markdown_fallible(
     out: *ArrayList(u8),
     decl_index: Decl.Index,
     field_node: Ast.Node.Index,
@@ -487,7 +474,7 @@ fn decl_field_html_fallible(
     }
 }
 
-fn decl_param_html_fallible(
+fn decl_param_markdown_fallible(
     out: *ArrayList(u8),
     decl_index: Decl.Index,
     param_node: Ast.Node.Index,
@@ -521,7 +508,7 @@ fn decl_param_html_fallible(
     }
 }
 
-export fn decl_fn_proto_html(decl_index: Decl.Index, linkify_fn_name: bool) String {
+export fn decl_fn_proto_markdown(decl_index: Decl.Index, linkify_fn_name: bool) String {
     const decl = decl_index.get();
     const ast = decl.file.get_ast();
     const proto_node = switch (ast.nodeTag(decl.ast_node)) {
@@ -548,11 +535,7 @@ export fn decl_fn_proto_html(decl_index: Decl.Index, linkify_fn_name: bool) Stri
     return String.init(string_result.items);
 }
 
-export fn decl_fn_proto_markdown(decl_index: Decl.Index, linkify_fn_name: bool) String {
-    return decl_fn_proto_html(decl_index, linkify_fn_name);
-}
-
-export fn decl_source_html(decl_index: Decl.Index) String {
+export fn decl_source_markdown(decl_index: Decl.Index) String {
     const decl = decl_index.get();
 
     string_result.clearRetainingCapacity();
@@ -562,11 +545,7 @@ export fn decl_source_html(decl_index: Decl.Index) String {
     return String.init(string_result.items);
 }
 
-export fn decl_source_markdown(decl_index: Decl.Index) String {
-    return decl_source_html(decl_index);
-}
-
-export fn decl_doctest_html(decl_index: Decl.Index) String {
+export fn decl_doctest_markdown(decl_index: Decl.Index) String {
     const decl = decl_index.get();
     const doctest_ast_node = decl.file.get().doctests.get(decl.ast_node) orelse
         return String.init("");
@@ -576,10 +555,6 @@ export fn decl_doctest_html(decl_index: Decl.Index) String {
         std.debug.panic("unable to render source: {s}", .{@errorName(err)});
     };
     return String.init(string_result.items);
-}
-
-export fn decl_doctest_markdown(decl_index: Decl.Index) String {
-    return decl_doctest_html(decl_index);
 }
 
 export fn decl_fqn(decl_index: Decl.Index) String {
@@ -658,17 +633,13 @@ export fn decl_name(decl_index: Decl.Index) String {
     return String.init(string_result.items);
 }
 
-export fn decl_docs_html(decl_index: Decl.Index, short: bool) String {
+export fn decl_docs_markdown(decl_index: Decl.Index, short: bool) String {
     const decl = decl_index.get();
     string_result.clearRetainingCapacity();
     if (decl.extra_info().first_doc_comment.unwrap()) |first_doc_comment| {
         render_docs(&string_result, decl_index, first_doc_comment, short) catch @panic("OOM");
     }
     return String.init(string_result.items);
-}
-
-export fn decl_docs_markdown(decl_index: Decl.Index, short: bool) String {
-    return decl_docs_html(decl_index, short);
 }
 
 fn collect_docs(
@@ -758,7 +729,7 @@ fn resolve_decl_path(decl_index: Decl.Index, path: []const u8) ?Decl.Index {
     return current_decl_index;
 }
 
-export fn decl_type_html(decl_index: Decl.Index) String {
+export fn decl_type_markdown(decl_index: Decl.Index) String {
     const decl = decl_index.get();
     const ast = decl.file.get_ast();
     string_result.clearRetainingCapacity();
@@ -772,7 +743,7 @@ export fn decl_type_html(decl_index: Decl.Index) String {
                     .collapse_whitespace = true,
                     .add_code_fence = false,
                 }) catch |e| {
-                    std.debug.panic("unable to render html: {s}", .{@errorName(e)});
+                    std.debug.panic("unable to render markdown: {s}", .{@errorName(e)});
                 };
                 string_result.appendSlice(gpa, "`") catch @panic("OOM");
                 break :t;
@@ -780,10 +751,6 @@ export fn decl_type_html(decl_index: Decl.Index) String {
         }
     }
     return String.init(string_result.items);
-}
-
-export fn decl_type_markdown(decl_index: Decl.Index) String {
-    return decl_type_html(decl_index);
 }
 
 const Oom = error{OutOfMemory};

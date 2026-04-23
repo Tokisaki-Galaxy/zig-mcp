@@ -410,7 +410,16 @@ function renderNamespaceLikeMarkdown(
         pushDetailedSection(lines, "Values", valueBodies);
     }
 
-    if (groups.types.length === 0 && groups.namespaces.length === 0 && groups.errorSets.length === 0 && groups.functions.length === 0 && fields.length === 0 && groups.globals.length === 0 && groups.values.length === 0 && includeSourceIfEmpty) {
+    if (
+        groups.types.length === 0 &&
+        groups.namespaces.length === 0 &&
+        groups.errorSets.length === 0 &&
+        groups.functions.length === 0 &&
+        fields.length === 0 &&
+        groups.globals.length === 0 &&
+        groups.values.length === 0 &&
+        includeSourceIfEmpty
+    ) {
         pushSection(lines, "Source Code", unwrapString(exports.decl_source_markdown(declIndex)));
     }
 
@@ -445,7 +454,9 @@ function renderFunctionMarkdown(exports: any, declIndex: number): string {
     const errorSetNode = exports.fn_error_set(declIndex);
     if (errorSetNode != null) {
         const baseDecl = exports.fn_error_set_decl(declIndex, errorSetNode);
-        const errorList = unwrapSlice64(exports.error_set_node_list(baseDecl, errorSetNode)).slice();
+        const errorList = unwrapSlice64(
+            exports.error_set_node_list(baseDecl, errorSetNode),
+        ).slice();
         if (errorList.length > 0) {
             const errorBodies = Array.from(errorList, (errorIdentifier) =>
                 unwrapString(exports.error_markdown(baseDecl, errorIdentifier)),
@@ -562,9 +573,7 @@ function renderStructuredStdLibItemMarkdown(
         case CAT_primitive:
             return renderValueMarkdown(exports, declIndex);
         default: {
-            const sourcePath = normalizeSourcePath(
-                unwrapString(exports.decl_file_path(declIndex)),
-            );
+            const sourcePath = normalizeSourcePath(unwrapString(exports.decl_file_path(declIndex)));
             const source = sourceIndex.files[sourcePath];
             if (source) {
                 return renderPlainStdLibItemMarkdown(itemFqn, sourcePath || undefined, source);
@@ -777,7 +786,7 @@ function renderSource(path: any) {
 
     let markdown = "";
     markdown += "# " + path + "\n\n";
-    markdown += unwrapString(wasm_exports.decl_source_html(decl_index));
+    markdown += unwrapString(wasm_exports.decl_source_markdown(decl_index));
 
     if (domContent) domContent.textContent = markdown;
     return markdown;
@@ -791,7 +800,7 @@ function renderNamespacePage(decl_index: any) {
     markdown += "# " + name + "\n\n";
 
     // Add documentation
-    const docs = unwrapString(wasm_exports.decl_docs_html(decl_index, false));
+    const docs = unwrapString(wasm_exports.decl_docs_markdown(decl_index, false));
     if (docs.length > 0) {
         markdown += docs + "\n\n";
     }
@@ -813,13 +822,13 @@ function renderFunction(decl_index: any) {
     markdown += "# " + name + "\n";
 
     // Add documentation
-    const docs = unwrapString(wasm_exports.decl_docs_html(decl_index, false));
+    const docs = unwrapString(wasm_exports.decl_docs_markdown(decl_index, false));
     if (docs.length > 0) {
         markdown += "\n" + docs;
     }
 
     // Add function prototype
-    const proto = unwrapString(wasm_exports.decl_fn_proto_html(decl_index, false));
+    const proto = unwrapString(wasm_exports.decl_fn_proto_markdown(decl_index, false));
     if (proto.length > 0) {
         markdown += "\n\n## Function Signature\n\n" + proto;
     }
@@ -829,8 +838,10 @@ function renderFunction(decl_index: any) {
     if (params.length > 0) {
         markdown += "\n\n## Parameters\n";
         for (let i = 0; i < params.length; i++) {
-            const param_html = unwrapString(wasm_exports.decl_param_html(decl_index, params[i]));
-            markdown += "\n" + param_html;
+            const param_markdown = unwrapString(
+                wasm_exports.decl_param_markdown(decl_index, params[i]),
+            );
+            markdown += `\n${param_markdown}`;
         }
     }
 
@@ -842,20 +853,22 @@ function renderFunction(decl_index: any) {
         if (errorList != null && errorList.length > 0) {
             markdown += "\n\n## Errors\n";
             for (let i = 0; i < errorList.length; i++) {
-                const error_html = unwrapString(wasm_exports.error_html(base_decl, errorList[i]));
-                markdown += "\n" + error_html;
+                const error_markdown = unwrapString(
+                    wasm_exports.error_markdown(base_decl, errorList[i]),
+                );
+                markdown += "\n" + error_markdown;
             }
         }
     }
 
     // Add doctest
-    const doctest = unwrapString(wasm_exports.decl_doctest_html(decl_index));
+    const doctest = unwrapString(wasm_exports.decl_doctest_markdown(decl_index));
     if (doctest.length > 0) {
         markdown += "\n\n## Example Usage\n\n" + doctest;
     }
 
     // Add source code
-    const source = unwrapString(wasm_exports.decl_source_html(decl_index));
+    const source = unwrapString(wasm_exports.decl_source_markdown(decl_index));
     if (source.length > 0) {
         markdown += "\n\n## Source Code\n\n" + source;
     }
@@ -872,13 +885,13 @@ function renderGlobal(decl_index: any) {
     markdown += "# " + name + "\n\n";
 
     // Add documentation
-    const docs = unwrapString(wasm_exports.decl_docs_html(decl_index, true));
+    const docs = unwrapString(wasm_exports.decl_docs_markdown(decl_index, true));
     if (docs.length > 0) {
         markdown += docs + "\n\n";
     }
 
     // Add source code
-    const source = unwrapString(wasm_exports.decl_source_html(decl_index));
+    const source = unwrapString(wasm_exports.decl_source_markdown(decl_index));
     if (source.length > 0) {
         markdown += "## Source Code\n\n" + source + "\n\n";
     }
@@ -895,7 +908,7 @@ function renderTypeFunction(decl_index: any) {
     markdown += "# " + name + "\n\n";
 
     // Add documentation
-    const docs = unwrapString(wasm_exports.decl_docs_html(decl_index, false));
+    const docs = unwrapString(wasm_exports.decl_docs_markdown(decl_index, false));
     if (docs.length > 0) {
         markdown += docs + "\n\n";
     }
@@ -905,13 +918,15 @@ function renderTypeFunction(decl_index: any) {
     if (params.length > 0) {
         markdown += "## Parameters\n\n";
         for (let i = 0; i < params.length; i++) {
-            const param_html = unwrapString(wasm_exports.decl_param_html(decl_index, params[i]));
-            markdown += param_html + "\n\n";
+            const param_markdown = unwrapString(
+                wasm_exports.decl_param_markdown(decl_index, params[i]),
+            );
+            markdown += `${param_markdown}\n\n`;
         }
     }
 
     // Add doctest
-    const doctest = unwrapString(wasm_exports.decl_doctest_html(decl_index));
+    const doctest = unwrapString(wasm_exports.decl_doctest_markdown(decl_index));
     if (doctest.length > 0) {
         markdown += "## Example Usage\n\n" + doctest + "\n\n";
     }
@@ -922,7 +937,7 @@ function renderTypeFunction(decl_index: any) {
     if (members.length !== 0 || fields.length !== 0) {
         markdown += renderNamespaceMarkdown(decl_index, members, fields);
     } else {
-        const source = unwrapString(wasm_exports.decl_source_html(decl_index));
+        const source = unwrapString(wasm_exports.decl_source_markdown(decl_index));
         if (source.length > 0) {
             markdown += "## Source Code\n\n" + source + "\n\n";
         }
@@ -940,7 +955,7 @@ function renderErrorSetPage(decl_index: any) {
     markdown += "# " + name + "\n\n";
 
     // Add documentation
-    const docs = unwrapString(wasm_exports.decl_docs_html(decl_index, false));
+    const docs = unwrapString(wasm_exports.decl_docs_markdown(decl_index, false));
     if (docs.length > 0) {
         markdown += docs + "\n\n";
     }
@@ -950,8 +965,10 @@ function renderErrorSetPage(decl_index: any) {
     if (errorSetList != null && errorSetList.length > 0) {
         markdown += "## Errors\n\n";
         for (let i = 0; i < errorSetList.length; i++) {
-            const error_html = unwrapString(wasm_exports.error_html(decl_index, errorSetList[i]));
-            markdown += error_html + "\n\n";
+            const error_markdown = unwrapString(
+                wasm_exports.error_markdown(decl_index, errorSetList[i]),
+            );
+            markdown += error_markdown + "\n\n";
         }
     }
 
@@ -1082,8 +1099,8 @@ function renderNamespaceMarkdown(base_decl: any, members: any, fields: any) {
         for (let i = 0; i < fnsList.length; i++) {
             const decl = fnsList[i];
             const name = declIndexName(decl);
-            const proto = unwrapString(wasm_exports.decl_fn_proto_html(decl, true));
-            const docs = unwrapString(wasm_exports.decl_docs_html(decl, true));
+            const proto = unwrapString(wasm_exports.decl_fn_proto_markdown(decl, true));
+            const docs = unwrapString(wasm_exports.decl_docs_markdown(decl, true));
 
             markdown += "### " + name + "\n\n";
             if (proto.length > 0) {
@@ -1098,8 +1115,10 @@ function renderNamespaceMarkdown(base_decl: any, members: any, fields: any) {
     if (fields.length > 0) {
         markdown += "## Fields\n\n";
         for (let i = 0; i < fields.length; i++) {
-            const field_html = unwrapString(wasm_exports.decl_field_html(base_decl, fields[i]));
-            markdown += field_html + "\n\n";
+            const field_markdown = unwrapString(
+                wasm_exports.decl_field_markdown(base_decl, fields[i]),
+            );
+            markdown += `${field_markdown}\n\n`;
         }
     }
 
@@ -1108,12 +1127,12 @@ function renderNamespaceMarkdown(base_decl: any, members: any, fields: any) {
         for (let i = 0; i < varsList.length; i++) {
             const decl = varsList[i];
             const name = declIndexName(decl);
-            const type_html = unwrapString(wasm_exports.decl_type_html(decl));
-            const docs = unwrapString(wasm_exports.decl_docs_html(decl, true));
+            const type_markdown = unwrapString(wasm_exports.decl_type_markdown(decl));
+            const docs = unwrapString(wasm_exports.decl_docs_markdown(decl, true));
 
             markdown += "### " + name + "\n\n";
-            if (type_html.length > 0) {
-                markdown += "Type: " + type_html + "\n\n";
+            if (type_markdown.length > 0) {
+                markdown += "Type: " + type_markdown + "\n\n";
             }
             if (docs.length > 0) {
                 markdown += docs + "\n\n";
@@ -1127,12 +1146,12 @@ function renderNamespaceMarkdown(base_decl: any, members: any, fields: any) {
             const original_decl = valsList[i].original;
             const decl = valsList[i].member;
             const name = declIndexName(original_decl);
-            const type_html = unwrapString(wasm_exports.decl_type_html(decl));
-            const docs = unwrapString(wasm_exports.decl_docs_html(decl, true));
+            const type_markdown = unwrapString(wasm_exports.decl_type_markdown(decl));
+            const docs = unwrapString(wasm_exports.decl_docs_markdown(decl, true));
 
             markdown += "### " + name + "\n\n";
-            if (type_html.length > 0) {
-                markdown += "Type: " + type_html + "\n\n";
+            if (type_markdown.length > 0) {
+                markdown += "Type: " + type_markdown + "\n\n";
             }
             if (docs.length > 0) {
                 markdown += docs + "\n\n";
@@ -1460,7 +1479,7 @@ function collectSearchEntries(version: string, exports: any): StdSearchIndex {
         const name = unwrapString(exports.decl_name(declIndex));
         const fqn = unwrapString(exports.decl_fqn(declIndex));
         const category = exports.categorize_decl(declIndex, 0);
-        const summary = makeSummary(unwrapString(exports.decl_docs_html(declIndex, false)));
+        const summary = makeSummary(unwrapString(exports.decl_docs_markdown(declIndex, false)));
 
         if (name.length > 0 || fqn.length > 0) {
             const terms = Array.from(
@@ -1590,35 +1609,6 @@ function renderSearchResultsMarkdown(
         for (const item of limitedResults) {
             const summary = item.entry.summary ? ` — ${item.entry.summary}` : "";
             markdown += `- ${item.entry.fqn} (${item.entry.kind})${summary}\n`;
-        }
-    } else {
-        markdown += "No results found.";
-    }
-
-    return markdown;
-}
-
-export async function searchStdLib(
-    wasmBytes: Uint8Array<ArrayBuffer>,
-    stdSources: Uint8Array<ArrayBuffer>,
-    query: string,
-    limit: number = 20,
-    cacheKey?: string,
-): Promise<string> {
-    await instantiateStdRuntime(wasmBytes, stdSources, cacheKey);
-
-    const ignoreCase = query.toLowerCase() === query;
-    const results = executeQuery(query, ignoreCase);
-
-    let markdown = `# Search Results\n\nQuery: "${query}"\n\n`;
-
-    if (results.length > 0) {
-        const limitedResults = results.slice(0, limit);
-        markdown += `Found ${results.length} results (showing ${limitedResults.length}):\n\n`;
-        for (let i = 0; i < limitedResults.length; i++) {
-            const match = limitedResults[i];
-            const full_name = fullyQualifiedName(match);
-            markdown += `- ${full_name}\n`;
         }
     } else {
         markdown += "No results found.";
@@ -1781,7 +1771,11 @@ export async function buildStdLibItemIndex(
                     })();
                     const source = sourcePath ? sourceIndex.files[sourcePath] : undefined;
                     items[fqn] = {
-                        markdown: renderPlainStdLibItemMarkdown(fqn, sourcePath || undefined, source),
+                        markdown: renderPlainStdLibItemMarkdown(
+                            fqn,
+                            sourcePath || undefined,
+                            source,
+                        ),
                         sourcePath,
                     };
                     console.warn(
@@ -1858,48 +1852,4 @@ export function searchStdLibFromIndex(
     limit: number = 20,
 ): string {
     return renderSearchResultsMarkdown(index.entries, query, limit);
-}
-
-export async function getStdLibItem(
-    wasmBytes: Uint8Array<ArrayBuffer>,
-    stdSources: Uint8Array<ArrayBuffer>,
-    name: string,
-    getSourceFile: boolean = false,
-    cacheKey?: string,
-): Promise<string> {
-    const exports = await instantiateStdRuntime(wasmBytes, stdSources, cacheKey);
-
-    const decl_index = findDecl(name);
-    if (decl_index === null) {
-        return `# Error\n\nDeclaration "${name}" not found.`;
-    }
-
-    if (getSourceFile) {
-        // Resolve aliases by decl index
-        let cur = decl_index;
-        const seen = new Set<number>();
-        while (true) {
-            const cat = exports.categorize_decl(cur, 0);
-            if (cat !== CAT_alias) break;
-            if (seen.has(cur)) break; // cycle guard
-            seen.add(cur);
-            const next = exports.get_aliasee();
-            if (next === -1 || next === cur) break;
-            cur = next;
-        }
-
-        const filePath = unwrapString(wasm_exports.decl_file_path(cur));
-        if (filePath && filePath.length > 0) {
-            const fileDecl = findFileRoot(filePath);
-            if (fileDecl !== null) {
-                let markdown = "";
-                markdown += "# " + filePath + "\n\n";
-                markdown += unwrapString(wasm_exports.decl_source_html(fileDecl));
-                return markdown;
-            }
-        }
-        return `# Error\n\nCould not find source file for "${name}".`;
-    }
-
-    return renderDecl(decl_index);
 }

@@ -2,7 +2,6 @@ const std = @import("std");
 const Ast = std.zig.Ast;
 const assert = std.debug.assert;
 const ArrayList = std.ArrayList;
-const Writer = std.Io.Writer;
 
 const Walk = @import("Walk");
 const Decl = Walk.Decl;
@@ -247,29 +246,6 @@ pub fn fileSourceMarkdown(
     }
 }
 
-pub fn fileSourceHtml(
-    file_index: Walk.File.Index,
-    out: *ArrayList(u8),
-    root_node: Ast.Node.Index,
-    options: RenderSourceOptions,
-) !void {
-    return fileSourceMarkdown(file_index, out, root_node, options);
-}
-
-fn appendUnindented(out: *ArrayList(u8), s: []const u8, indent: usize) !void {
-    var it = std.mem.splitScalar(u8, s, '\n');
-    var is_first_line = true;
-    while (it.next()) |line| {
-        if (is_first_line) {
-            try appendEscaped(out, line);
-            is_first_line = false;
-        } else {
-            try out.appendSlice(gpa, "\n");
-            try appendEscaped(out, unindent(line, indent));
-        }
-    }
-}
-
 fn appendUnindentedPlain(out: *ArrayList(u8), s: []const u8, indent: usize) !void {
     var it = std.mem.splitScalar(u8, s, '\n');
     var is_first_line = true;
@@ -280,19 +256,6 @@ fn appendUnindentedPlain(out: *ArrayList(u8), s: []const u8, indent: usize) !voi
         } else {
             try out.appendSlice(gpa, "\n");
             try out.appendSlice(gpa, unindent(line, indent));
-        }
-    }
-}
-
-pub fn appendEscaped(out: *ArrayList(u8), s: []const u8) !void {
-    for (s) |c| {
-        try out.ensureUnusedCapacity(gpa, 6);
-        switch (c) {
-            '&' => out.appendSliceAssumeCapacity("&amp;"),
-            '<' => out.appendSliceAssumeCapacity("&lt;"),
-            '>' => out.appendSliceAssumeCapacity("&gt;"),
-            '"' => out.appendSliceAssumeCapacity("&quot;"),
-            else => out.appendAssumeCapacity(c),
         }
     }
 }
