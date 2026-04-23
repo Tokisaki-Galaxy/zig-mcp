@@ -2,19 +2,12 @@
   "name": "zig-mcp",
   "version": "1.4.1",
   "type": "module",
-  "bin": {
-    "zig-mcp": "dist/mcp.js"
-  },
-  "main": "dist/mcp.js",
-  "files": [
-    "dist/**/*",
-    "README.md",
-    "LICENSE"
-  ],
   "scripts": {
-    "dev": "bun run build && bunx @modelcontextprotocol/inspector bun dist/mcp.js",
-    "build": "zig build --release && tsc && cp zig-out/main.wasm mcp/index.html dist/",
-    "prepublishOnly": "bun run build",
+    "dev:worker": "wrangler dev",
+    "build": "bun run typecheck",
+    "deploy:worker": "wrangler deploy",
+    "snapshot:prepare": "bun scripts/prepare-r2-bundle.ts",
+    "snapshot:publish": "bun scripts/publish-r2-bundle.ts",
     "lint": "bunx biome check",
     "lint:fix": "bunx biome check --write",
     "typecheck": "tsc --noEmit"
@@ -32,17 +25,20 @@
     "zig",
     "ziglang",
     "zig-docs",
-    "cli"
+    "cloudflare-workers"
   ],
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.15.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "agents": "^0.11.5",
     "cheerio": "^1.1.0",
     "env-paths": "^3.0.0",
     "zod": "^3.25.75"
   },
   "devDependencies": {
     "@biomejs/biome": "2.1.1",
+    "@cloudflare/workers-types": "^4.20260423.1",
     "@types/bun": "latest",
+    "wrangler": "^4.84.1",
     "typescript": "^5.8.3"
   },
   "engines": {

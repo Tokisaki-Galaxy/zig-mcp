@@ -1,0 +1,15 @@
+{
+    "name": "zig-mcp-worker",
+    "main": "worker/index.ts",
+    "compatibility_date": "2026-04-23",
+    "compatibility_flags": ["nodejs_compat"],
+    "vars": {
+        "DEFAULT_ZIG_VERSION": "master"
+    },
+    "r2_buckets": [
+        {
+            "binding": "ZIG_DOCS",
+            "bucket_name": "zig-docs"
+        }
+    ]
+}

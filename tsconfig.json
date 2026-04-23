@@ -5,12 +5,12 @@
     "moduleResolution": "Node16",
     "esModuleInterop": true,
     "outDir": "./dist",
-    "rootDir": "mcp",
+    "rootDir": ".",
     "strict": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "types": ["node"]
   },
-  "include": ["mcp/**/*"],
+  "include": ["mcp/**/*", "worker/**/*", "scripts/**/*"],
   "exclude": ["node_modules", "dist"]
 }

@@ -815,14 +815,11 @@ function setInputString(s: any) {
 }
 
 export async function searchStdLib(
-    wasmPath: string | Uint8Array,
+    wasmBytes: Uint8Array<ArrayBuffer>,
     stdSources: Uint8Array<ArrayBuffer>,
     query: string,
     limit: number = 20,
 ): Promise<string> {
-    const fs = await import("node:fs");
-    const wasmBytes = typeof wasmPath === "string" ? fs.readFileSync(wasmPath) : wasmPath;
-
     const wasmModule = await WebAssembly.instantiate(wasmBytes, {
         js: {
             log: (level: any, ptr: any, len: any) => {
@@ -863,14 +860,11 @@ export async function searchStdLib(
 }
 
 export async function getStdLibItem(
-    wasmPath: string | Uint8Array,
+    wasmBytes: Uint8Array<ArrayBuffer>,
     stdSources: Uint8Array<ArrayBuffer>,
     name: string,
     getSourceFile: boolean = false,
 ): Promise<string> {
-    const fs = await import("node:fs");
-    const wasmBytes = typeof wasmPath === "string" ? fs.readFileSync(wasmPath) : wasmPath;
-
     const wasmModule = await WebAssembly.instantiate(wasmBytes, {
         js: {
             log: (level: any, ptr: any, len: any) => {
