@@ -564,6 +564,10 @@ export fn decl_fqn(decl_index: Decl.Index) String {
     return String.init(string_result.items);
 }
 
+export fn decl_count() u32 {
+    return @intCast(Walk.decls.items.len);
+}
+
 export fn decl_parent(decl_index: Decl.Index) Decl.Index {
     const decl = decl_index.get();
     return decl.parent;

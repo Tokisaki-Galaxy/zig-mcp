@@ -280,11 +280,20 @@ function collectMemberGroups(
     const values: Array<{ original: number; member: number }> = [];
 
     for (const member of members) {
+        if (!isValidDeclIndex(member)) {
+            continue;
+        }
+
         let current = member;
         const original = member;
         const seen = new Set<number>();
 
         while (true) {
+            if (!isValidDeclIndex(current)) {
+                values.push({ original, member: current });
+                break;
+            }
+
             const category = exports.categorize_decl(current, 0);
             switch (category) {
                 case CAT_namespace:
@@ -453,15 +462,19 @@ function renderFunctionMarkdown(exports: any, declIndex: number): string {
 
     const errorSetNode = exports.fn_error_set(declIndex);
     if (errorSetNode != null) {
-        const baseDecl = exports.fn_error_set_decl(declIndex, errorSetNode);
-        const errorList = unwrapSlice64(
-            exports.error_set_node_list(baseDecl, errorSetNode),
-        ).slice();
-        if (errorList.length > 0) {
-            const errorBodies = Array.from(errorList, (errorIdentifier) =>
-                unwrapString(exports.error_markdown(baseDecl, errorIdentifier)),
-            );
-            pushDetailedSection(lines, "Errors", errorBodies);
+        try {
+            const baseDecl = exports.fn_error_set_decl(declIndex, errorSetNode);
+            const errorList = unwrapSlice64(
+                exports.error_set_node_list(baseDecl, errorSetNode),
+            ).slice();
+            if (errorList.length > 0) {
+                const errorBodies = Array.from(errorList, (errorIdentifier) =>
+                    unwrapString(exports.error_markdown(baseDecl, errorIdentifier)),
+                );
+                pushDetailedSection(lines, "Errors", errorBodies);
+            }
+        } catch {
+            // Some Zig 0.16.0 items still have error-set shapes we cannot render safely.
         }
     }
 
@@ -1378,14 +1391,14 @@ function unwrapSlice32(bigint: any) {
     const ptr = Number(bigint & 0xffffffffn);
     const len = Number(bigint >> 32n);
     if (len === 0) return [];
-    return new Uint32Array(wasm_exports.memory.buffer, ptr, len);
+    return Array.from(new Uint32Array(wasm_exports.memory.buffer, ptr, len));
 }
 
 function unwrapSlice64(bigint: any) {
     const ptr = Number(bigint & 0xffffffffn);
     const len = Number(bigint >> 32n);
     if (len === 0) return [];
-    return new BigUint64Array(wasm_exports.memory.buffer, ptr, len);
+    return Array.from(new BigUint64Array(wasm_exports.memory.buffer, ptr, len));
 }
 
 function findDecl(fqn: any) {
@@ -1473,6 +1486,10 @@ function collectSearchEntries(version: string, exports: any): StdSearchIndex {
     const seen = new Set<number>();
 
     const traverse = (declIndex: number) => {
+        if (!isValidDeclIndex(declIndex)) {
+            return;
+        }
+
         if (seen.has(declIndex)) return;
         seen.add(declIndex);
 
@@ -1703,10 +1720,18 @@ export async function buildStdSearchIndex(
 }
 
 function resolveAliasedDeclIndex(exports: any, declIndex: number): number {
+    if (!isValidDeclIndex(declIndex)) {
+        return declIndex;
+    }
+
     const seen = new Set<number>();
     let current = declIndex;
 
     while (true) {
+        if (!isValidDeclIndex(current)) {
+            return current;
+        }
+
         const category = exports.categorize_decl(current, 0);
         if (category !== CAT_alias) {
             return current;
@@ -1726,6 +1751,14 @@ function resolveAliasedDeclIndex(exports: any, declIndex: number): number {
     }
 }
 
+function declCount(): number {
+    return Number(wasm_exports.decl_count());
+}
+
+function isValidDeclIndex(declIndex: number): boolean {
+    return Number.isInteger(declIndex) && declIndex >= 0 && declIndex < declCount();
+}
+
 export async function buildStdLibItemIndex(
     wasmBytes: Uint8Array<ArrayBuffer>,
     stdSources: Uint8Array<ArrayBuffer>,
@@ -1739,6 +1772,10 @@ export async function buildStdLibItemIndex(
 
     const traverse = (declIndex: number) => {
         try {
+            if (!isValidDeclIndex(declIndex)) {
+                return;
+            }
+
             if (visited.has(declIndex)) {
                 return;
             }
