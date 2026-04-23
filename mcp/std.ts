@@ -829,8 +829,10 @@ function renderFunction(decl_index: any) {
     if (params.length > 0) {
         markdown += "\n\n## Parameters\n";
         for (let i = 0; i < params.length; i++) {
-            const param_html = unwrapString(wasm_exports.decl_param_markdown(decl_index, params[i]));
-            markdown += "\n" + param_html;
+            const param_markdown = unwrapString(
+                wasm_exports.decl_param_markdown(decl_index, params[i]),
+            );
+            markdown += `\n${param_markdown}`;
         }
     }
 
@@ -905,8 +907,10 @@ function renderTypeFunction(decl_index: any) {
     if (params.length > 0) {
         markdown += "## Parameters\n\n";
         for (let i = 0; i < params.length; i++) {
-            const param_html = unwrapString(wasm_exports.decl_param_markdown(decl_index, params[i]));
-            markdown += param_html + "\n\n";
+            const param_markdown = unwrapString(
+                wasm_exports.decl_param_markdown(decl_index, params[i]),
+            );
+            markdown += `${param_markdown}\n\n`;
         }
     }
 
@@ -1098,8 +1102,10 @@ function renderNamespaceMarkdown(base_decl: any, members: any, fields: any) {
     if (fields.length > 0) {
         markdown += "## Fields\n\n";
         for (let i = 0; i < fields.length; i++) {
-            const field_html = unwrapString(wasm_exports.decl_field_markdown(base_decl, fields[i]));
-            markdown += field_html + "\n\n";
+            const field_markdown = unwrapString(
+                wasm_exports.decl_field_markdown(base_decl, fields[i]),
+            );
+            markdown += `${field_markdown}\n\n`;
         }
     }
 
@@ -1108,12 +1114,12 @@ function renderNamespaceMarkdown(base_decl: any, members: any, fields: any) {
         for (let i = 0; i < varsList.length; i++) {
             const decl = varsList[i];
             const name = declIndexName(decl);
-            const type_html = unwrapString(wasm_exports.decl_type_markdown(decl));
+            const type_markdown = unwrapString(wasm_exports.decl_type_markdown(decl));
             const docs = unwrapString(wasm_exports.decl_docs_markdown(decl, true));
 
             markdown += "### " + name + "\n\n";
-            if (type_html.length > 0) {
-                markdown += "Type: " + type_html + "\n\n";
+            if (type_markdown.length > 0) {
+                markdown += "Type: " + type_markdown + "\n\n";
             }
             if (docs.length > 0) {
                 markdown += docs + "\n\n";
@@ -1127,12 +1133,12 @@ function renderNamespaceMarkdown(base_decl: any, members: any, fields: any) {
             const original_decl = valsList[i].original;
             const decl = valsList[i].member;
             const name = declIndexName(original_decl);
-            const type_html = unwrapString(wasm_exports.decl_type_markdown(decl));
+            const type_markdown = unwrapString(wasm_exports.decl_type_markdown(decl));
             const docs = unwrapString(wasm_exports.decl_docs_markdown(decl, true));
 
             markdown += "### " + name + "\n\n";
-            if (type_html.length > 0) {
-                markdown += "Type: " + type_html + "\n\n";
+            if (type_markdown.length > 0) {
+                markdown += "Type: " + type_markdown + "\n\n";
             }
             if (docs.length > 0) {
                 markdown += docs + "\n\n";
