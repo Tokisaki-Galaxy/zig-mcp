@@ -410,7 +410,16 @@ function renderNamespaceLikeMarkdown(
         pushDetailedSection(lines, "Values", valueBodies);
     }
 
-    if (groups.types.length === 0 && groups.namespaces.length === 0 && groups.errorSets.length === 0 && groups.functions.length === 0 && fields.length === 0 && groups.globals.length === 0 && groups.values.length === 0 && includeSourceIfEmpty) {
+    if (
+        groups.types.length === 0 &&
+        groups.namespaces.length === 0 &&
+        groups.errorSets.length === 0 &&
+        groups.functions.length === 0 &&
+        fields.length === 0 &&
+        groups.globals.length === 0 &&
+        groups.values.length === 0 &&
+        includeSourceIfEmpty
+    ) {
         pushSection(lines, "Source Code", unwrapString(exports.decl_source_markdown(declIndex)));
     }
 
@@ -445,7 +454,9 @@ function renderFunctionMarkdown(exports: any, declIndex: number): string {
     const errorSetNode = exports.fn_error_set(declIndex);
     if (errorSetNode != null) {
         const baseDecl = exports.fn_error_set_decl(declIndex, errorSetNode);
-        const errorList = unwrapSlice64(exports.error_set_node_list(baseDecl, errorSetNode)).slice();
+        const errorList = unwrapSlice64(
+            exports.error_set_node_list(baseDecl, errorSetNode),
+        ).slice();
         if (errorList.length > 0) {
             const errorBodies = Array.from(errorList, (errorIdentifier) =>
                 unwrapString(exports.error_markdown(baseDecl, errorIdentifier)),
@@ -562,9 +573,7 @@ function renderStructuredStdLibItemMarkdown(
         case CAT_primitive:
             return renderValueMarkdown(exports, declIndex);
         default: {
-            const sourcePath = normalizeSourcePath(
-                unwrapString(exports.decl_file_path(declIndex)),
-            );
+            const sourcePath = normalizeSourcePath(unwrapString(exports.decl_file_path(declIndex)));
             const source = sourceIndex.files[sourcePath];
             if (source) {
                 return renderPlainStdLibItemMarkdown(itemFqn, sourcePath || undefined, source);
@@ -844,7 +853,9 @@ function renderFunction(decl_index: any) {
         if (errorList != null && errorList.length > 0) {
             markdown += "\n\n## Errors\n";
             for (let i = 0; i < errorList.length; i++) {
-                const error_markdown = unwrapString(wasm_exports.error_markdown(base_decl, errorList[i]));
+                const error_markdown = unwrapString(
+                    wasm_exports.error_markdown(base_decl, errorList[i]),
+                );
                 markdown += "\n" + error_markdown;
             }
         }
@@ -954,7 +965,9 @@ function renderErrorSetPage(decl_index: any) {
     if (errorSetList != null && errorSetList.length > 0) {
         markdown += "## Errors\n\n";
         for (let i = 0; i < errorSetList.length; i++) {
-            const error_markdown = unwrapString(wasm_exports.error_markdown(decl_index, errorSetList[i]));
+            const error_markdown = unwrapString(
+                wasm_exports.error_markdown(decl_index, errorSetList[i]),
+            );
             markdown += error_markdown + "\n\n";
         }
     }
@@ -1758,7 +1771,11 @@ export async function buildStdLibItemIndex(
                     })();
                     const source = sourcePath ? sourceIndex.files[sourcePath] : undefined;
                     items[fqn] = {
-                        markdown: renderPlainStdLibItemMarkdown(fqn, sourcePath || undefined, source),
+                        markdown: renderPlainStdLibItemMarkdown(
+                            fqn,
+                            sourcePath || undefined,
+                            source,
+                        ),
                         sourcePath,
                     };
                     console.warn(
